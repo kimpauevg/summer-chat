@@ -3,23 +3,32 @@
     <style>
         .messages {
             display: flex;
-            flex-direction: column-reverse;
+            flex: 1 1 auto;
+            flex-direction: column;
+            overflow-y: scroll;
+            min-height: 0;
+            height: 650px;
         }
-        .message-textarea{
+
+        .message-textarea {
             width: 100%;
             resize: none;
         }
+
         .message__sender {
             font-weight: bold;
         }
+
         .message {
             border: black 1px;
             width: 100%;
             padding: 10px;
         }
-        .mine .message__sender, .mine .message__text{
+
+        .mine .message__sender, .mine .message__text {
             text-align: right;
         }
+
     </style>
 @endsection
 @section('content')
@@ -30,9 +39,11 @@
                     <div class="card-header">Чат с {{$profile['nickname']}}</div>
                     <div class="card-body messages">
                         @if(empty($messages))
-                            Сообщений нет, но вы можете начать первым
+                            <div class="no-message">
+                                Сообщений нет, но вы можете начать первым
+                            </div>
                         @else
-                            @foreach($messages as $message)
+                            @foreach(array_reverse($messages) as $message)
                                 @if($message->player_id == $profile['player_id'])
                                     <div class="message">
                                         <div class="message__sender">
@@ -59,7 +70,9 @@
                     <div class="card-body">
                         <textarea class="message-textarea">
                         </textarea>
-                        <button id="send-message" type="button">Отправить сообщение</button>
+                        <button id="send-message" type="button">
+                            Отправить сообщение
+                        </button>
                     </div>
                 </div>
             </div>
@@ -68,7 +81,25 @@
 @endsection
 @section('scripts')
     <script defer>
-        $( document ).ready(() => {
+        $(document).ready(() => {
+            $('.messages').scrollTop(9999);
+            Echo.channel('{{$key}}')
+                .listen('.NewPrivateMessage', (e) => {
+                    console.log('message');
+                    console.log(e);
+
+                    if (e.)
+                    $('.messages').append(
+                        '<div class="' + msg_class + '">' +
+                            '<div class="message__sender">' +
+                                nickname +
+                            '</div>' +
+                            '<div class="message__text">' +
+                                e.message +
+                            '</div>'+
+                        '</div>'
+                    );
+                });
             $('#send-message').click(function () {
                 let message = ($(this).siblings('textarea')[0].value);
                 console.log(message)
@@ -88,6 +119,27 @@
                     console.log('should send')
                 }
             })
+            function addMessage(message, mine) {
+                let msg_class = 'message';
+                let nickname = '{{$profile['nickname']}}';
+                if (mine) {
+                    msg_class += " mine";
+                    nickname = 'Вы';
+                }
+
+
+                $('.messages').append(
+                    '<div class="' + msg_class + '">' +
+                    '<div class="message__sender">' +
+                    nickname +
+                    '</div>' +
+                    '<div class="message__text">' +
+                    e.message +
+                    '</div>'+
+                    '</div>'
+                );
+
+            }
         });
     </script>
 @endsection

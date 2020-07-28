@@ -5,6 +5,7 @@ namespace App\Models;
 
 
 use App\Models\Database\Message;
+use App\Models\Events\NewPrivateMessage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\Database\Chat as DbChat;
@@ -32,7 +33,7 @@ class Chat
         ]);
 
         $messages = array_map(function ($message) {
-            $message->message = str_replace(PHP_EOL.PHP_EOL, PHP_EOL, $message->message);
+            $message->message = str_replace(PHP_EOL . PHP_EOL, PHP_EOL, $message->message);
             return $message;
         }, $messages);
         return $messages;
@@ -50,24 +51,37 @@ class Chat
         }
         $player_id = Player::getId();
         $offset = $page * $amount_on_page;
-        $found_chats = DB::select('
+        $query = '
         SELECT 
             chats.id,
             message,
             chat_messages.updated_at,
+            (CASE 
+                WHEN :uid = chats.user_id 
+                    THEN chats.chat_with 
+                ELSE chats.user_id 
+            END) as companion_id,
             players.nickname
         FROM chats
         LEFT JOIN chat_messages ON chat_messages.id = (SELECT MAX(id) from chat_messages WHERE chat_id = chats.id)
-        LEFT JOIN players ON players.user_id = :uid1
-        WHERE chats.user_id = :uid2 OR chats.chat_with = :uid3
+        LEFT JOIN players 
+            ON CASE 
+                WHEN :uid = chats.user_id 
+                    THEN chats.chat_with 
+                ELSE chats.user_id 
+            END =  players.id 
+        WHERE chats.user_id = :uid OR chats.chat_with = :uid
         LIMIT :on_page
         OFFSET :offset
-        ', [
+        ';
+        /**
+         * Security problem possible
+         */
+        $query = str_replace(':uid', $player_id, $query);
+
+        $found_chats = DB::select($query, [
             'on_page' => $amount_on_page,
             'offset' => $offset,
-            'uid1' => $player_id,
-            'uid2' => $player_id,
-            'uid3' => $player_id,
         ]);
         return $found_chats;
     }
@@ -76,18 +90,20 @@ class Chat
     {
         $chat_id = self::tryGetChatId($chat_with);
         $player_id = Player::getId();
-        if(!$chat_id) {
+        if (!$chat_id) {
             DbChat::create([
                 'user_id' => $player_id,
                 'chat_with' => $chat_with
             ]);
             $chat_id = self::tryGetChatId($chat_with);
         }
-        Message::create([
+        $message = Message::create([
             'message' => $message,
             'chat_id' => $chat_id,
             'user_id' => $player_id,
         ]);
+        broadcast(new NewPrivateMessage($chat_with, $message));
+
     }
 
     private static function tryGetChatId($chat_with)
@@ -109,6 +125,22 @@ class Chat
             return $chat_id->id;
         }
         return false;
+    }
 
+    public static function getChatKey($with)
+    {
+        $player_id = Player::getId();
+        if ($player_id > $with) {
+            $id_array = [
+                $with,
+                $player_id
+            ];
+        } else {
+            $id_array = [
+                $player_id,
+                $with
+            ];
+        }
+        return sprintf('PrivateInfo.%s.%s', $id_array[0], $id_array[1]);
     }
 }

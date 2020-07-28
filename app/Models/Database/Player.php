@@ -16,8 +16,12 @@ class Player extends Model
     protected $fillable = [
         'nickname', 'user_id',
     ];
-    public static function getId()
+
+    public static function getId($user_id = null)
     {
+        if ($user_id !== null) {
+            return DB::selectOne('SELECT id FROM players where user_id = ? LIMIT 1',[$user_id])->id ?? null;
+        }
         $id_from_session = request()->session()->get('player_id');
         if ($id_from_session) {
             return $id_from_session;
